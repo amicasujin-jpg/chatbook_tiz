@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>챗북(ChatBook) - 대화형 스마트 가계부</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Pretendard / Inter Font -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            expense: '#f43f5e',
+            income: '#10b981',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.7);
+    }
+    
+    .chat-bubble-tail-bot {
+      border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;
+    }
+    .chat-bubble-tail-user {
+      border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;
+    }
+    @keyframes bounceSubtle {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+    .bounce-subtle {
+      animation: bounceSubtle 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased font-sans min-h-screen flex flex-col selection:bg-indigo-100 selection:text-indigo-800">
+
+  <!-- Header Bar -->
+  <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-100">
+          <i class="fa-solid fa-receipt text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            챗북 <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 font-semibold border border-indigo-100">AI 스마트 입력</span>
+          </h1>
+          <div class="flex items-center gap-2">
+            <p class="text-xs text-slate-500 hidden sm:block">말하듯이 툭 입력하면 끝나는 초간편 가계부</p>
+            <span id="syncIndicator" class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+              <i class="fa-solid fa-cloud text-[10px]"></i> 자동 저장 켜짐
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button id="viewToggleBtn" onclick="toggleMainView()" class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-chart-pie text-indigo-500"></i>
+          <span id="viewToggleText">통계 보기</span>
+        </button>
+        <button onclick="exportCSV()" title="CSV 내보내기" class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition text-xs shadow-sm">
+          <i class="fa-solid fa-file-arrow-down"></i>
+        </button>
+        <button onclick="loadSampleData()" title="샘플 데이터 불러오기" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium transition">
+          샘플 채우기
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <main class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5">
+    
+    <!-- LEFT PANEL: Chat & Smart Input (7 Cols) -->
+    <section id="chatSection" class="lg:col-span-7 flex flex-col bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden h-[calc(100vh-6.5rem)] min-h-[580px]">
+      
+      <!-- Chat Sub-header -->
+      <div class="px-5 py-3.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span class="text-xs font-semibold text-slate-700">스마트 가계부 비서</span>
+          <span class="text-[11px] text-slate-400">· 실시간 문맥 파싱 동작 중</span>
+        </div>
+        <button onclick="clearChatHistory()" class="text-[11px] text-slate-400 hover:text-rose-500 transition flex items-center gap-1">
+          <i class="fa-solid fa-trash-can"></i> 대화 비우기
+        </button>
+      </div>
+
+      <!-- Quick Syntax Hint Bar -->
+      <div class="px-4 py-2 bg-indigo-50/60 border-b border-indigo-100/50 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600">
+        <span class="font-bold text-indigo-700 mr-1"><i class="fa-regular fa-lightbulb"></i> 빠른 팁:</span>
+        <button onclick="fillExample('/지출 = 야식 2만원')" class="bg-white px-2 py-0.5 rounded-lg border border-indigo-200/60 hover:border-indigo-400 transition cursor-pointer text-indigo-900 font-mono">
+          /지출 = 야식 2만원
+        </button>
+        <button onclick="fillExample('수입/ 블로그원고료 10만원')" class="bg-white px-2 py-0.5 rounded-lg border border-indigo-200/60 hover:border-indigo-400 transition cursor-pointer text-indigo-900 font-mono">
+          수입/ 블로그원고료 10만원
+        </button>
+        <button onclick="fillExample('아아 4500')" class="hidden sm:inline-block bg-white px-2 py-0.5 rounded-lg border border-indigo-200/60 hover:border-indigo-400 transition cursor-pointer text-indigo-900 font-mono">
+          아아 4500
+        </button>
+      </div>
+
+      <!-- Chat Messages Scroll Area -->
+      <div id="chatMessages" class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+        <!-- Initial welcome bot bubble -->
+        <div class="flex items-start gap-2.5 max-w-[90%] sm:max-w-[80%]">
+          <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm text-xs font-bold">
+            챗
+          </div>
+          <div class="bg-slate-100 text-slate-800 p-3.5 chat-bubble-tail-bot text-sm shadow-xs border border-slate-200/60 leading-relaxed">
+            <p class="font-semibold text-slate-900 mb-1">안녕하세요! 무엇이든 편하게 적어보세요 👋</p>
+            <p class="text-xs text-slate-600 mb-2">
+              카테고리나 버튼을 일일이 누를 필요 없이 그냥 한 줄로 치면 알아서 분석해 드려요!
+            </p>
+            <div class="text-[12px] bg-white/80 p-2.5 rounded-xl border border-slate-200 space-y-1 text-slate-700">
+              <div>💡 <span class="font-semibold text-rose-500">지출:</span> <code class="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">/지출 = 야식 2만원</code> 또는 <code class="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">점심 국밥 9000원</code></div>
+              <div>💡 <span class="font-semibold text-emerald-600">수입:</span> <code class="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">수입/ 블로그원고료 10만원</code> 또는 <code class="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">월급 350만</code></div>
+              <div>💡 <span class="font-semibold text-indigo-600">날짜:</span> <code class="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">어제 택시 1.5만원</code> 도 가능해요!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Parser Preview Badge -->
+      <div id="livePreviewContainer" class="px-4 py-2 bg-slate-50 border-t border-slate-200/70 hidden transition-all duration-200">
+        <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
+            <span class="text-slate-400 font-medium">자동인식 미리보기:</span>
+            <span id="previewTypeBadge" class="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-rose-100 text-rose-700">지출</span>
+            <span id="previewCategoryBadge" class="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 font-medium text-[11px]">기타</span>
+            <span id="previewDesc" class="font-semibold text-slate-800 truncate"></span>
+            <span id="previewAmount" class="font-bold text-rose-600"></span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-mono shrink-0">Enter로 등록</span>
+        </div>
+      </div>
+
+      <!-- Input Controls Box -->
+      <div class="p-3 sm:p-4 bg-white border-t border-slate-200/80">
+        <form id="chatForm" onsubmit="handleFormSubmit(event)" class="relative flex items-center gap-2">
+          <!-- Quick Type Selector (Optional override toggle) -->
+          <div class="relative">
+            <button type="button" id="typeToggleBtn" onclick="cycleInputType()" class="h-11 px-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 flex items-center gap-1.5 transition">
+              <span id="typeToggleDot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+              <span id="typeToggleLabel">자동</span>
+            </button>
+          </div>
+
+          <!-- Main Input Field -->
+          <div class="relative flex-1">
+            <input 
+              type="text" 
+              id="messageInput"
+              placeholder="예: /지출 = 야식 2만원 or 수입/ 블로그원고료 10만" 
+              autocomplete="off"
+              oninput="handleInputChange(this.value)"
+              class="w-full h-11 pl-4 pr-11 bg-slate-100/80 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition text-slate-800 placeholder-slate-400"
+            />
+            <button 
+              type="submit" 
+              class="absolute right-1.5 top-1.5 w-8 h-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition shadow-sm"
+              title="입력하기"
+            >
+              <i class="fa-solid fa-arrow-up text-xs"></i>
+            </button>
+          </div>
+        </form>
+
+        <!-- Quick Tag Shortcuts -->
+        <div class="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs text-slate-500">
+          <span class="text-[11px] text-slate-400 shrink-0 font-medium">자주 쓰는 키:</span>
+          <button type="button" onclick="prependText('/지출 = ')" class="shrink-0 px-2 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-600 transition text-[11px] font-medium border border-slate-200/50">/지출 =</button>
+          <button type="button" onclick="prependText('수입/ ')" class="shrink-0 px-2 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 transition text-[11px] font-medium border border-slate-200/50">수입/</button>
+          <button type="button" onclick="prependText('어제 ')" class="shrink-0 px-2 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 transition text-[11px] font-medium border border-slate-200/50">어제</button>
+          <button type="button" onclick="appendToken('만원')" class="shrink-0 px-2 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 transition text-[11px] font-medium border border-slate-200/50">+만원</button>
+          <button type="button" onclick="appendToken('5000원')" class="shrink-0 px-2 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 transition text-[11px] font-medium border border-slate-200/50">+5천원</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Financial Dashboard & History (5 Cols) -->
+    <section id="dashboardSection" class="lg:col-span-5 flex flex-col gap-4">
+      
+      <!-- Top Balance Card -->
+      <div class="bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-700 rounded-3xl p-5 text-white shadow-lg shadow-indigo-200">
+        <div class="flex items-center justify-between text-indigo-100 text-xs font-medium mb-1">
+          <span id="currentMonthLabel">이번 달 총 자산 흐름</span>
+          <span class="bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[11px]">실시간 결산</span>
+        </div>
+        
+        <div class="mt-2 flex items-baseline gap-2">
+          <span class="text-xs opacity-75">순 잔액</span>
+          <h2 id="netBalanceDisplay" class="text-3xl font-extrabold tracking-tight">0원</h2>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/15">
+          <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-3">
+            <div class="text-[11px] text-emerald-200 flex items-center gap-1 font-medium">
+              <i class="fa-solid fa-arrow-trend-up"></i> 이번 달 수입
+            </div>
+            <div id="totalIncomeDisplay" class="text-lg font-bold text-white mt-0.5">0원</div>
+          </div>
+          <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-3">
+            <div class="text-[11px] text-rose-200 flex items-center gap-1 font-medium">
+              <i class="fa-solid fa-arrow-trend-down"></i> 이번 달 지출
+            </div>
+            <div id="totalExpenseDisplay" class="text-lg font-bold text-white mt-0.5">0원</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Categories Progress & Distribution -->
+      <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-layer-group text-indigo-500"></i>
+            지출 카테고리 분석
+          </h3>
+          <span id="expenseCountBadge" class="text-xs text-slate-400">총 0건</span>
+        </div>
+        <div id="categoryProgressContainer" class="space-y-2.5 max-h-44 overflow-y-auto pr-1">
+          <!-- Dynamically inserted category bars -->
+          <div class="text-xs text-slate-400 py-3 text-center">아직 등록된 지출 내역이 없습니다.</div>
+        </div>
+      </div>
+
+      <!-- Transactions History Card -->
+      <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm flex-1 flex flex-col min-h-[350px]">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-clock-rotate-left text-indigo-500"></i>
+              최근 거래 내역
+            </h3>
+          </div>
+          
+          <!-- Filters -->
+          <div class="flex items-center bg-slate-100 p-0.5 rounded-xl text-xs font-semibold">
+            <button onclick="setFilter('all')" id="filterAll" class="px-2.5 py-1 rounded-lg bg-white shadow-xs text-slate-800">전체</button>
+            <button onclick="setFilter('expense')" id="filterExpense" class="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800">지출</button>
+            <button onclick="setFilter('income')" id="filterIncome" class="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800">수입</button>
+          </div>
+        </div>
+
+        <!-- Ledger Table List -->
+        <div id="transactionList" class="flex-1 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100">
+          <!-- Dynamically populated transaction cards -->
+        </div>
+
+        <!-- Empty state placeholder -->
+        <div id="emptyTransactionsState" class="hidden flex-1 flex-col items-center justify-center py-10 text-center text-slate-400">
+          <i class="fa-regular fa-clipboard text-3xl mb-2 opacity-50"></i>
+          <p class="text-xs">내역이 없습니다. 왼쪽 대화창에 입력해 보세요!</p>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Edit Modal (Never alert/confirm) -->
+  <div id="editModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 hidden p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100">
+      <div class="flex items-center justify-between mb-4">
+        <h4 class="text-base font-bold text-slate-800">내역 수정</h4>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="editItemIndex">
+
+      <div class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-600 mb-1">구분</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="editTypeExpense" onclick="setEditType('expense')" class="py-2 rounded-xl font-bold border border-rose-300 bg-rose-50 text-rose-600">지출</button>
+            <button type="button" id="editTypeIncome" onclick="setEditType('income')" class="py-2 rounded-xl font-bold border border-slate-200 bg-slate-50 text-slate-500">수입</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-600 mb-1">항목명 / 내용</label>
+          <input type="text" id="editDescInput" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-600 mb-1">금액 (원)</label>
+          <input type="number" id="editAmountInput" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-600 mb-1">카테고리</label>
+          <select id="editCategorySelect" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+            <!-- options will be injected -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-600 mb-1">날짜</label>
+          <input type="date" id="editDateInput" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 mt-6">
+        <button onclick="closeEditModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 font-bold text-slate-600 text-xs transition">
+          취소
+        </button>
+        <button onclick="saveEditItem()" class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-white text-xs transition shadow-sm">
+          저장하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Alert/Toast Notification System -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Storage Initialization
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'chatbook-app';
+    let db = null;
+    let auth = null;
+    let currentUserId = null;
+    let isStorageReady = false;
+
+    if (typeof __firebase_config !== 'undefined') {
+      try {
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+      } catch (err) {
+        console.error("저장소 초기화 오류:", err);
+      }
+    }
+
+    const CATEGORIES = {
+      expense: [
+        { id: 'food', name: '식비/배달', icon: 'fa-utensils', color: 'bg-amber-100 text-amber-700', keywords: ['야식', '치킨', '피자', '배달', '밥', '식사', '점심', '저녁', '식당', '국밥', '라면', '버거', '초밥', '고기', '삼겹살', '배민', '요기요', '쿠팡이츠', '간식'] },
+        { id: 'cafe', name: '카페/음료', icon: 'fa-mug-hot', color: 'bg-orange-100 text-orange-700', keywords: ['커피', '카페', '스타벅스', '스벅', '아아', '투썸', '이디야', '디저트', '음료', '베이커리', '빵', '마카롱'] },
+        { id: 'traffic', name: '교통/차량', icon: 'fa-car', color: 'bg-blue-100 text-blue-700', keywords: ['교통', '택시', '버스', '지하철', '주유', '기름', '주차', '하이패스', '톨비', '카카오택시', 'ktx', '기차'] },
+        { id: 'shopping', name: '쇼핑/생활', icon: 'fa-bag-shopping', color: 'bg-purple-100 text-purple-700', keywords: ['쇼핑', '쿠팡', '네이버쇼핑', '옷', '신발', '마트', '편의점', '다이소', '올리브영', '생필품', '세제', '화장품'] },
+        { id: 'living', name: '주거/통신', icon: 'fa-house', color: 'bg-teal-100 text-teal-700', keywords: ['월세', '관리비', '전기세', '가스비', '수도세', '인터넷', '통신비', '핸드폰', '구독', '넷플릭스', '유튜브'] },
+        { id: 'health', name: '의료/건강', icon: 'fa-heart-pulse', color: 'bg-rose-100 text-rose-700', keywords: ['병원', '약국', '치과', '의원', '치료', '영양제', '헬스', '피트니스', '필라테스'] },
+        { id: 'hobby', name: '문화/취미', icon: 'fa-gamepad', color: 'bg-emerald-100 text-emerald-700', keywords: ['영화', '게임', '책', '도서', '서점', '공연', '노래방', '취미', '볼링'] },
+        { id: 'other_exp', name: '기타지출', icon: 'fa-receipt', color: 'bg-slate-100 text-slate-700', keywords: [] }
+      ],
+      income: [
+        { id: 'salary', name: '급여/월급', icon: 'fa-money-bill-wave', color: 'bg-emerald-100 text-emerald-700', keywords: ['월급', '급여', '기본급', '상여', '보너스', '성과급', '알바비', '주급'] },
+        { id: 'side', name: '부수입/원고료', icon: 'fa-laptop-code', color: 'bg-indigo-100 text-indigo-700', keywords: ['원고료', '블로그', '애드포스트', '부업', '외주', '강의', '유튜브수익', '당근', '중고'] },
+        { id: 'invest', name: '금융/투자', icon: 'fa-chart-line', color: 'bg-cyan-100 text-cyan-700', keywords: ['배당', '이자', '환급', '투자', '주식', '코인'] },
+        { id: 'allowance', name: '용돈/선물', icon: 'fa-gift', color: 'bg-pink-100 text-pink-700', keywords: ['용돈', '선물', '축의금', '조의금', '축하금', '세뱃돈'] },
+        { id: 'other_inc', name: '기타수입', icon: 'fa-wallet', color: 'bg-slate-100 text-slate-700', keywords: [] }
+      ]
+    };
+
+    let transactions = [];
+    let activeFilter = 'all';
+    let currentInputMode = 'auto';
+    let editSelectedType = 'expense';
+
+    async function startStorageSync() {
+      if (!auth || !db) return;
+
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+
+        const user = auth.currentUser;
+        if (!user) return;
+        currentUserId = user.uid;
+        isStorageReady = true;
+
+        const syncBadge = document.getElementById('syncIndicator');
+        if (syncBadge) {
+          syncBadge.innerHTML = `<i class="fa-solid fa-cloud text-[10px]"></i> 자동 저장 중`;
+        }
+
+        // Rule 1 & Rule 2: private path & simple query without compound filters
+        const txCollection = collection(db, 'artifacts', appId, 'users', currentUserId, 'transactions');
+        
+        onSnapshot(txCollection, (snapshot) => {
+          const list = [];
+          snapshot.forEach(docSnap => {
+            list.push(docSnap.data());
+          });
+
+          // Sort in JavaScript memory (Rule 2)
+          list.sort((a, b) => {
+            const dateA = a.date || '';
+            const dateB = b.date || '';
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+            return (b.timestamp || 0) - (a.timestamp || 0);
+          });
+
+          transactions = list;
+          updateDashboard();
+        }, (err) => {
+          console.error("데이터 동기화 오류:", err);
+          showToast('데이터 동기화 중 일시적 오류가 발생했습니다.', 'warning');
+        });
+
+      } catch (err) {
+        console.error("인증 및 동기화 실패:", err);
+      }
+    }
+
+    function parseKoreanAmount(str) {
+      if (!str) return null;
+      let text = str.trim().replace(/,/g, '');
+
+      let total = 0;
+      let matched = false;
+
+      const eokMatch = text.match(/([\d.]+)\s*억/);
+      if (eokMatch) {
+        total += parseFloat(eokMatch[1]) * 100000000;
+        text = text.replace(eokMatch[0], '');
+        matched = true;
+      }
+
+      const manMatch = text.match(/([\d.]+)\s*만(?:원)?/);
+      if (manMatch) {
+        total += parseFloat(manMatch[1]) * 10000;
+        text = text.replace(manMatch[0], '');
+        matched = true;
+      }
+
+      const cheonMatch = text.match(/([\d.]+)\s*천(?:원)?/);
+      if (cheonMatch) {
+        total += parseFloat(cheonMatch[1]) * 1000;
+        text = text.replace(cheonMatch[0], '');
+        matched = true;
+      }
+
+      const plainMatch = text.match(/(\d+)(?:\s*원)?/);
+      if (plainMatch) {
+        total += parseInt(plainMatch[1], 10);
+        matched = true;
+      }
+
+      return matched && total > 0 ? Math.round(total) : null;
+    }
+
+    function parseNaturalText(input) {
+      if (!input || !input.trim()) return null;
+      let text = input.trim();
+      let type = currentInputMode !== 'auto' ? currentInputMode : 'expense';
+      let date = new Date().toISOString().split('T')[0];
+
+      const expensePrefixRegex = /^(?:\/지출\s*=?|지출\/|\-지출|\/소비\s*=?|소비\/|\-)\s*/i;
+      const incomePrefixRegex = /^(?:\/수입\s*=?|수입\/|\+수입|\/입금\s*=?|입금\/|\+)\s*/i;
+
+      if (incomePrefixRegex.test(text)) {
+        type = 'income';
+        text = text.replace(incomePrefixRegex, '').trim();
+      } else if (expensePrefixRegex.test(text)) {
+        type = 'expense';
+        text = text.replace(expensePrefixRegex, '').trim();
+      } else if (currentInputMode === 'auto') {
+        if (/월급|급여|보너스|상여|원고료|용돈|애드포스트|배당|환급|이자/.test(text)) {
+          type = 'income';
+        } else {
+          type = 'expense';
+        }
+      }
+
+      if (/^어제\s+/.test(text)) {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        date = d.toISOString().split('T')[0];
+        text = text.replace(/^어제\s+/, '').trim();
+      } else if (/^그저께\s+|^그제\s+/.test(text)) {
+        const d = new Date();
+        d.setDate(d.getDate() - 2);
+        date = d.toISOString().split('T')[0];
+        text = text.replace(/^(?:그저께|그제)\s+/, '').trim();
+      } else if (/^오늘\s+/.test(text)) {
+        text = text.replace(/^오늘\s+/, '').trim();
+      }
+
+      const amountRegex = /([\d,.]+\s*(?:억|만|천)?\s*원|[\d.]+\s*(?:억|만|천)|\b\d{3,9}\b)/;
+      const amountMatch = text.match(amountRegex);
+
+      let amount = null;
+      let description = text;
+
+      if (amountMatch) {
+        amount = parseKoreanAmount(amountMatch[0]);
+        description = text.replace(amountMatch[0], '').trim();
+      }
+
+      description = description.replace(/^[=\/:\-\+]\s*/, '').replace(/\s+/g, ' ').trim();
+      if (!description && amount) {
+        description = type === 'expense' ? '일반 지출' : '일반 수입';
+      }
+
+      let categoryId = type === 'expense' ? 'other_exp' : 'other_inc';
+      const categoryPool = CATEGORIES[type];
+
+      for (const cat of categoryPool) {
+        if (cat.keywords.some(kw => description.includes(kw))) {
+          categoryId = cat.id;
+          break;
+        }
+      }
+
+      return {
+        type,
+        amount: amount || 0,
+        rawAmountValid: amount !== null && amount > 0,
+        description: description || '내역 없음',
+        categoryId,
+        date
+      };
+    }
+
+    window.handleInputChange = function(val) {
+      const previewContainer = document.getElementById('livePreviewContainer');
+      const previewTypeBadge = document.getElementById('previewTypeBadge');
+      const previewCategoryBadge = document.getElementById('previewCategoryBadge');
+      const previewDesc = document.getElementById('previewDesc');
+      const previewAmount = document.getElementById('previewAmount');
+
+      if (!val || !val.trim()) {
+        previewContainer.classList.add('hidden');
+        return;
+      }
+
+      const parsed = parseNaturalText(val);
+      if (!parsed || !parsed.rawAmountValid) {
+        previewContainer.classList.add('hidden');
+        return;
+      }
+
+      previewContainer.classList.remove('hidden');
+
+      if (parsed.type === 'expense') {
+        previewTypeBadge.textContent = '지출';
+        previewTypeBadge.className = 'px-2 py-0.5 rounded-md font-semibold text-[11px] bg-rose-100 text-rose-700';
+        previewAmount.className = 'font-bold text-rose-600';
+        previewAmount.textContent = `-${parsed.amount.toLocaleString()}원`;
+      } else {
+        previewTypeBadge.textContent = '수입';
+        previewTypeBadge.className = 'px-2 py-0.5 rounded-md font-semibold text-[11px] bg-emerald-100 text-emerald-700';
+        previewAmount.className = 'font-bold text-emerald-600';
+        previewAmount.textContent = `+${parsed.amount.toLocaleString()}원`;
+      }
+
+      const catObj = CATEGORIES[parsed.type].find(c => c.id === parsed.categoryId);
+      previewCategoryBadge.textContent = catObj ? catObj.name : '기타';
+      previewDesc.textContent = parsed.description;
+    };
+
+    window.cycleInputType = function() {
+      const dot = document.getElementById('typeToggleDot');
+      const label = document.getElementById('typeToggleLabel');
+      
+      if (currentInputMode === 'auto') {
+        currentInputMode = 'expense';
+        dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+        label.textContent = '지출만';
+      } else if (currentInputMode === 'expense') {
+        currentInputMode = 'income';
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        label.textContent = '수입만';
+      } else {
+        currentInputMode = 'auto';
+        dot.className = 'w-2 h-2 rounded-full bg-slate-400';
+        label.textContent = '자동';
+      }
+      window.handleInputChange(document.getElementById('messageInput').value);
+    };
+
+    window.prependText = function(prefix) {
+      const input = document.getElementById('messageInput');
+      input.value = prefix + input.value.replace(/^\/지출\s*=?\s*|^수입\/\s*|^어제\s*/, '');
+      input.focus();
+      window.handleInputChange(input.value);
+    };
+
+    window.appendToken = function(token) {
+      const input = document.getElementById('messageInput');
+      input.value = (input.value.trim() + ' ' + token).trim();
+      input.focus();
+      window.handleInputChange(input.value);
+    };
+
+    window.fillExample = function(example) {
+      const input = document.getElementById('messageInput');
+      input.value = example;
+      input.focus();
+      window.handleInputChange(example);
+    };
+
+    window.handleFormSubmit = async function(e) {
+      e.preventDefault();
+      const input = document.getElementById('messageInput');
+      const val = input.value.trim();
+      if (!val) return;
+
+      const parsed = parseNaturalText(val);
+
+      if (!parsed || !parsed.rawAmountValid) {
+        showToast('금액을 인식하지 못했어요. 예: 야식 2만원, 원고료 10만', 'warning');
+        addBotMessage(`😅 금액을 명확하게 파악하지 못했어요.<br><b>"항목명 금액"</b> 형식으로 입력해 주세요! (예: <code class="bg-slate-200 px-1 rounded">/지출 = 야식 2만원</code>, <code class="bg-slate-200 px-1 rounded">택시비 15000</code>)`);
+        return;
+      }
+
+      addUserMessage(val);
+
+      const txId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+      const newTx = {
+        id: txId,
+        type: parsed.type,
+        amount: parsed.amount,
+        description: parsed.description,
+        categoryId: parsed.categoryId,
+        date: parsed.date,
+        timestamp: Date.now()
+      };
+
+      // Persist to storage
+      if (isStorageReady && auth && auth.currentUser && db) {
+        try {
+          const docRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'transactions', txId);
+          await setDoc(docRef, newTx);
+        } catch (err) {
+          console.error("저장 오류:", err);
+          transactions.unshift(newTx);
+          updateDashboard();
+        }
+      } else {
+        transactions.unshift(newTx);
+        updateDashboard();
+      }
+
+      const catObj = CATEGORIES[parsed.type].find(c => c.id === parsed.categoryId);
+      const isExp = parsed.type === 'expense';
+      const formattedAmt = parsed.amount.toLocaleString() + '원';
+      const badgeClass = isExp ? 'text-rose-600 font-bold' : 'text-emerald-600 font-bold';
+      
+      const botResponse = `
+        <div class="space-y-1">
+          <div class="flex items-center gap-1.5 font-medium text-slate-800">
+            <span class="px-2 py-0.5 rounded-md text-[11px] font-bold ${isExp ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">
+              ${isExp ? '지출 기록' : '수입 기록'}
+            </span>
+            <span>${catObj ? catObj.name : ''}</span>
+          </div>
+          <div class="text-sm">
+            <b>"${parsed.description}"</b> ${isExp ? '지출' : '수입'} <span class="${badgeClass}">${formattedAmt}</span> 을(를) 안전하게 저장했습니다! 💾
+          </div>
+          <div class="text-[11px] text-slate-400">
+            일자: ${parsed.date} · 자동 저장됨
+          </div>
+        </div>
+      `;
+
+      addBotMessage(botResponse);
+
+      input.value = '';
+      document.getElementById('livePreviewContainer').classList.add('hidden');
+      showToast(`${parsed.description} (${formattedAmt}) 저장 완료!`, 'success');
+    };
+
+    function addUserMessage(text) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'flex items-start justify-end gap-2.5 max-w-[90%] sm:max-w-[80%] ml-auto';
+      div.innerHTML = `
+        <div class="bg-indigo-600 text-white p-3.5 chat-bubble-tail-user text-sm shadow-sm leading-relaxed break-all">
+          ${escapeHtml(text)}
+        </div>
+        <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center shrink-0 text-xs font-bold">
+          나
+        </div>
+      `;
+      container.appendChild(div);
+      scrollChatToBottom();
+    }
+
+    function addBotMessage(html) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'flex items-start gap-2.5 max-w-[90%] sm:max-w-[85%]';
+      div.innerHTML = `
+        <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm text-xs font-bold">
+          챗
+        </div>
+        <div class="bg-slate-100 text-slate-800 p-3.5 chat-bubble-tail-bot text-sm shadow-xs border border-slate-200/60 leading-relaxed">
+          ${html}
+        </div>
+      `;
+      container.appendChild(div);
+      scrollChatToBottom();
+    }
+
+    function scrollChatToBottom() {
+      const c = document.getElementById('chatMessages');
+      setTimeout(() => {
+        c.scrollTop = c.scrollHeight;
+      }, 50);
+    }
+
+    window.clearChatHistory = function() {
+      const c = document.getElementById('chatMessages');
+      c.innerHTML = `
+        <div class="flex items-start gap-2.5 max-w-[90%] sm:max-w-[80%]">
+          <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm text-xs font-bold">
+            챗
+          </div>
+          <div class="bg-slate-100 text-slate-800 p-3.5 chat-bubble-tail-bot text-sm shadow-xs border border-slate-200/60 leading-relaxed">
+            <p class="font-semibold text-slate-900 mb-1">대화창을 비웠습니다 🧹</p>
+            <p class="text-xs text-slate-600">입력하신 모든 가계부 내역은 실시간 자동 저장되어 안전하게 유지됩니다!</p>
+          </div>
+        </div>
+      `;
+      showToast('대화 기록을 비웠습니다.', 'info');
+    };
+
+    function updateDashboard() {
+      let totalIncome = 0;
+      let totalExpense = 0;
+      const categoryTotals = {};
+
+      transactions.forEach(t => {
+        if (t.type === 'income') {
+          totalIncome += t.amount;
+        } else {
+          totalExpense += t.amount;
+          categoryTotals[t.categoryId] = (categoryTotals[t.categoryId] || 0) + t.amount;
+        }
+      });
+
+      const netBalance = totalIncome - totalExpense;
+
+      document.getElementById('totalIncomeDisplay').textContent = totalIncome.toLocaleString() + '원';
+      document.getElementById('totalExpenseDisplay').textContent = totalExpense.toLocaleString() + '원';
+      
+      const netDisplay = document.getElementById('netBalanceDisplay');
+      if (netBalance >= 0) {
+        netDisplay.textContent = '+' + netBalance.toLocaleString() + '원';
+        netDisplay.className = 'text-3xl font-extrabold tracking-tight text-white';
+      } else {
+        netDisplay.textContent = '-' + Math.abs(netBalance).toLocaleString() + '원';
+        netDisplay.className = 'text-3xl font-extrabold tracking-tight text-rose-200';
+      }
+
+      renderCategoryAnalytics(categoryTotals, totalExpense);
+      renderTransactionList();
+    }
+
+    function renderCategoryAnalytics(categoryTotals, totalExpense) {
+      const container = document.getElementById('categoryProgressContainer');
+      const badge = document.getElementById('expenseCountBadge');
+
+      const expEntries = transactions.filter(t => t.type === 'expense');
+      badge.textContent = `총 ${expEntries.length}건`;
+
+      if (totalExpense === 0 || expEntries.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-400 py-4 text-center">지출 내역이 아직 없습니다.</div>`;
+        return;
+      }
+
+      const sorted = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+
+      let html = '';
+      sorted.forEach(([catId, amount]) => {
+        const cat = CATEGORIES.expense.find(c => c.id === catId) || { name: '기타', icon: 'fa-receipt' };
+        const percent = Math.round((amount / totalExpense) * 100);
+
+        html += `
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid ${cat.icon} text-slate-400 text-[11px] w-4"></i>
+                ${cat.name}
+              </span>
+              <span class="font-mono text-slate-600">${amount.toLocaleString()}원 <span class="text-slate-400 font-normal">(${percent}%)</span></span>
+            </div>
+            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full bg-indigo-500 rounded-full transition-all duration-500" style="width: ${percent}%;"></div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function renderTransactionList() {
+      const container = document.getElementById('transactionList');
+      const emptyState = document.getElementById('emptyTransactionsState');
+
+      const filtered = transactions.filter(t => {
+        if (activeFilter === 'all') return true;
+        return t.type === activeFilter;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      let html = '';
+
+      filtered.forEach((tx) => {
+        const isExp = tx.type === 'expense';
+        const cat = (CATEGORIES[tx.type] || []).find(c => c.id === tx.categoryId) || { name: '기타', icon: 'fa-receipt', color: 'bg-slate-100 text-slate-700' };
+
+        html += `
+          <div class="py-2.5 flex items-center justify-between group hover:bg-slate-50/80 px-2 rounded-xl transition">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-xl ${cat.color} flex items-center justify-center shrink-0 text-xs">
+                <i class="fa-solid ${cat.icon}"></i>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-bold text-slate-800 truncate">${escapeHtml(tx.description)}</p>
+                <div class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                  <span>${tx.date}</span>
+                  <span>·</span>
+                  <span class="font-medium text-slate-500">${cat.name}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <div class="text-right">
+                <span class="text-xs font-extrabold ${isExp ? 'text-rose-600' : 'text-emerald-600'}">
+                  ${isExp ? '-' : '+'}${tx.amount.toLocaleString()}원
+                </span>
+              </div>
+              
+              <div class="opacity-80 sm:opacity-0 group-hover:opacity-100 transition flex items-center gap-1">
+                <button onclick="window.openEditModal('${tx.id}')" title="수정" class="p-1.5 hover:text-indigo-600 text-slate-400 text-xs transition">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="window.deleteTransaction('${tx.id}')" title="삭제" class="p-1.5 hover:text-rose-600 text-slate-400 text-xs transition">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    window.setFilter = function(filter) {
+      activeFilter = filter;
+      document.getElementById('filterAll').className = filter === 'all' ? 'px-2.5 py-1 rounded-lg bg-white shadow-xs text-slate-800 font-bold' : 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800';
+      document.getElementById('filterExpense').className = filter === 'expense' ? 'px-2.5 py-1 rounded-lg bg-white shadow-xs text-slate-800 font-bold' : 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800';
+      document.getElementById('filterIncome').className = filter === 'income' ? 'px-2.5 py-1 rounded-lg bg-white shadow-xs text-slate-800 font-bold' : 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800';
+      renderTransactionList();
+    };
+
+    window.deleteTransaction = async function(id) {
+      if (isStorageReady && auth && auth.currentUser && db) {
+        try {
+          const docRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'transactions', id);
+          await deleteDoc(docRef);
+          showToast('내역이 안전하게 삭제되었습니다.', 'info');
+        } catch (err) {
+          console.error("삭제 실패:", err);
+          showToast('삭제 중 오류가 발생했습니다.', 'warning');
+        }
+      } else {
+        const idx = transactions.findIndex(t => t.id === id);
+        if (idx !== -1) {
+          transactions.splice(idx, 1);
+          updateDashboard();
+          showToast('내역이 삭제되었습니다.', 'info');
+        }
+      }
+    };
+
+    window.openEditModal = function(id) {
+      const item = transactions.find(t => t.id === id);
+      if (!item) return;
+
+      document.getElementById('editItemIndex').value = id;
+      document.getElementById('editDescInput').value = item.description;
+      document.getElementById('editAmountInput').value = item.amount;
+      document.getElementById('editDateInput').value = item.date;
+
+      window.setEditType(item.type);
+      populateEditCategories(item.type, item.categoryId);
+
+      document.getElementById('editModal').classList.remove('hidden');
+    };
+
+    window.closeEditModal = function() {
+      document.getElementById('editModal').classList.add('hidden');
+    };
+
+    window.setEditType = function(type) {
+      editSelectedType = type;
+      const expBtn = document.getElementById('editTypeExpense');
+      const incBtn = document.getElementById('editTypeIncome');
+
+      if (type === 'expense') {
+        expBtn.className = 'py-2 rounded-xl font-bold border border-rose-300 bg-rose-50 text-rose-600';
+        incBtn.className = 'py-2 rounded-xl font-bold border border-slate-200 bg-slate-50 text-slate-500';
+      } else {
+        incBtn.className = 'py-2 rounded-xl font-bold border border-emerald-300 bg-emerald-50 text-emerald-600';
+        expBtn.className = 'py-2 rounded-xl font-bold border border-slate-200 bg-slate-50 text-slate-500';
+      }
+      populateEditCategories(type);
+    };
+
+    function populateEditCategories(type, selectedId) {
+      const select = document.getElementById('editCategorySelect');
+      const cats = CATEGORIES[type] || [];
+      select.innerHTML = cats.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${c.name}</option>`).join('');
+    }
+
+    window.saveEditItem = async function() {
+      const id = document.getElementById('editItemIndex').value;
+      const item = transactions.find(t => t.id === id);
+      if (!item) return;
+
+      const desc = document.getElementById('editDescInput').value.trim();
+      const amount = parseInt(document.getElementById('editAmountInput').value, 10);
+      const catId = document.getElementById('editCategorySelect').value;
+      const date = document.getElementById('editDateInput').value;
+
+      if (!desc || isNaN(amount) || amount <= 0) {
+        showToast('유효한 내용과 금액을 입력해 주세요.', 'warning');
+        return;
+      }
+
+      const updated = {
+        ...item,
+        type: editSelectedType,
+        description: desc,
+        amount: amount,
+        categoryId: catId,
+        date: date
+      };
+
+      if (isStorageReady && auth && auth.currentUser && db) {
+        try {
+          const docRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'transactions', id);
+          await setDoc(docRef, updated);
+          window.closeEditModal();
+          showToast('내역이 성공적으로 저장되었습니다.', 'success');
+        } catch (err) {
+          console.error("수정 저장 오류:", err);
+          showToast('저장 중 문제가 발생했습니다.', 'warning');
+        }
+      } else {
+        Object.assign(item, updated);
+        window.closeEditModal();
+        updateDashboard();
+        showToast('내역이 수정되었습니다.', 'success');
+      }
+    };
+
+    window.loadSampleData = async function() {
+      const today = new Date().toISOString().split('T')[0];
+      const d1 = new Date(); d1.setDate(d1.getDate() - 1); const yesterday = d1.toISOString().split('T')[0];
+      const d2 = new Date(); d2.setDate(d2.getDate() - 3); const threeDaysAgo = d2.toISOString().split('T')[0];
+
+      const sampleBatch = [
+        { id: 'sample_1', type: 'income', amount: 3500000, description: '정기 월급', categoryId: 'salary', date: threeDaysAgo, timestamp: Date.now() - 3000 },
+        { id: 'sample_2', type: 'income', amount: 100000, description: '블로그 원고료 입금', categoryId: 'side', date: yesterday, timestamp: Date.now() - 2000 },
+        { id: 'sample_3', type: 'expense', amount: 24000, description: '교촌 야식 치킨 배달', categoryId: 'food', date: yesterday, timestamp: Date.now() - 1000 },
+        { id: 'sample_4', type: 'expense', amount: 4500, description: '스타벅스 아메리카노', categoryId: 'cafe', date: today, timestamp: Date.now() },
+        { id: 'sample_5', type: 'expense', amount: 12500, description: '야간 귀가 택시비', categoryId: 'traffic', date: today, timestamp: Date.now() + 1 },
+        { id: 'sample_6', type: 'expense', amount: 35000, description: '올리브영 생필품 쇼핑', categoryId: 'shopping', date: today, timestamp: Date.now() + 2 },
+      ];
+
+      if (isStorageReady && auth && auth.currentUser && db) {
+        try {
+          for (const item of sampleBatch) {
+            const docRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'transactions', item.id);
+            await setDoc(docRef, item);
+          }
+          showToast('샘플 데이터가 클라우드에 저장되었습니다.', 'success');
+        } catch (err) {
+          console.error("샘플 저장 오류:", err);
+        }
+      } else {
+        transactions = sampleBatch;
+        updateDashboard();
+        showToast('샘플 거래 내역 6건이 로드되었습니다.', 'success');
+      }
+    };
+
+    window.exportCSV = function() {
+      if (transactions.length === 0) {
+        showToast('내보낼 데이터가 없습니다.', 'warning');
+        return;
+      }
+
+      let csv = "\uFEFF일자,구분,카테고리,항목명,금액\n";
+      transactions.forEach(t => {
+        const cat = (CATEGORIES[t.type] || []).find(c => c.id === t.categoryId);
+        const typeStr = t.type === 'expense' ? '지출' : '수입';
+        const catStr = cat ? cat.name : '기타';
+        csv += `"${t.date}","${typeStr}","${catStr}","${t.description.replace(/"/g, '""')}",${t.amount}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `가계부_내역_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('CSV 파일이 다운로드되었습니다.', 'success');
+    };
+
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      
+      const colors = {
+        success: 'bg-emerald-600 text-white shadow-emerald-200',
+        warning: 'bg-amber-600 text-white shadow-amber-200',
+        info: 'bg-slate-800 text-white shadow-slate-200'
+      };
+
+      const icons = {
+        success: 'fa-circle-check',
+        warning: 'fa-triangle-exclamation',
+        info: 'fa-circle-info'
+      };
+
+      toast.className = `flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-lg text-xs font-semibold transform transition-all duration-300 translate-y-3 opacity-0 pointer-events-auto ${colors[type] || colors.info}`;
+      toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i> <span>${escapeHtml(msg)}</span>`;
+
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-3', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    window.toggleMainView = function() {
+      const dash = document.getElementById('dashboardSection');
+      const btnText = document.getElementById('viewToggleText');
+
+      if (dash.classList.contains('hidden')) {
+        dash.classList.remove('hidden');
+        btnText.textContent = '통계 접기';
+      } else {
+        dash.classList.add('hidden');
+        btnText.textContent = '통계 보기';
+      }
+    };
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const now = new Date();
+      document.getElementById('currentMonthLabel').textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월 자산 흐름`;
+      startStorageSync();
+      updateDashboard();
+    });
+  </script>
+</body>
+</html>
